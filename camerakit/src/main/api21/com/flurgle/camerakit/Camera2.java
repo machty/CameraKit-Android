@@ -4,6 +4,7 @@ import android.annotation.TargetApi;
 import android.content.Context;
 import android.graphics.ImageFormat;
 import android.graphics.PointF;
+import android.hardware.Camera;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
@@ -161,7 +162,22 @@ class Camera2 extends CameraImpl {
     }
 
     @Override
+    void setPreviewCallback(Camera.PreviewCallback callback) {
+        this.mPreviewCallback = callback;
+    }
+
+    @Override
+    void setPreviewCallback2(Camera.PreviewCallback callback) {
+
+    }
+
+    @Override
     void captureImage() {
+
+    }
+
+    @Override
+    void captureImage(Camera.ShutterCallback shutterCallback) {
 
     }
 
@@ -240,6 +256,12 @@ class Camera2 extends CameraImpl {
         }
         return mCameraPropertyMap.get(mCamera.getId());
     }
+
+    @Override
+    int getPreviewFormat() {
+        return 0;
+    }
+
     // Internal
 
     private List<Size> getAvailableCaptureResolutions() {

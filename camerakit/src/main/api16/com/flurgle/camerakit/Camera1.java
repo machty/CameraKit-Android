@@ -1,5 +1,6 @@
 package com.flurgle.camerakit;
 
+import android.graphics.ImageFormat;
 import android.graphics.Rect;
 import android.graphics.YuvImage;
 import android.hardware.Camera;
@@ -95,6 +96,30 @@ public class Camera1 extends CameraImpl {
         setFacing(mFacing);
         openCamera();
         if (mPreview.isReady()) setupPreview();
+
+        if (mPreviewCallback != null){
+            final int size = mPreviewSize.getWidth() * mPreviewSize.getHeight() * ImageFormat.getBitsPerPixel(mCameraParameters.getPreviewFormat()) / 8;
+            final byte[][] mPreBuffer = {new byte[size]};
+            mCamera.addCallbackBuffer(mPreBuffer[0]);
+            mCamera.setPreviewCallbackWithBuffer(new Camera.PreviewCallback() {
+                @Override
+                public void onPreviewFrame(byte[] data, final Camera camera) {
+                    if (mPreBuffer[0] == null) {
+                        mPreBuffer[0] = new byte[size];
+                    }
+                    if (mCamera != null){
+                        mCamera.addCallbackBuffer(mPreBuffer[0]);
+                        new Thread(new ProcessStillTask(data, camera, calculateCaptureRotation(), new ProcessStillTask.OnStillProcessedListener() {
+                            @Override
+                            public void onStillProcessed(final YuvImage yuv) {
+                                Camera1.this.mPreviewCallback.onPreviewFrame(mPreBuffer[0], camera);
+                            }
+                        })).start();
+                    }
+                }
+            });
+        }
+
         mCamera.startPreview();
     }
 
@@ -212,31 +237,48 @@ public class Camera1 extends CameraImpl {
     }
 
     @Override
+    void setPreviewCallback(Camera.PreviewCallback callback) {
+        this.mPreviewCallback = callback;
+    }
+
+    @Override
+    void setPreviewCallback2(Camera.PreviewCallback callback) {
+        this.mPreviewCallback2 = callback;
+    }
+
+    @Override
     void captureImage() {
+        captureImage(null);
+    }
+
+    @Override
+    void captureImage(Camera.ShutterCallback shutterCallback) {
         switch (mMethod) {
             case METHOD_STANDARD:
-                // Null check required for camera here as is briefly null when View is detached
-                if (!capturingImage && mCamera != null) {
-
-                    // Set boolean to wait for image callback
-                    capturingImage = true;
-
-                    mCamera.takePicture(null, null, null,
-                        new Camera.PictureCallback() {
-                            @Override
-                            public void onPictureTaken(byte[] data, Camera camera) {
-                                mCameraListener.onPictureTaken(data);
-
-                                // Reset capturing state to allow photos to be taken
-                                capturingImage = false;
-
-                                camera.startPreview();
-                            }
-                        });
-                }
-                else {
-                    Log.w(TAG, "Unable, waiting for picture to be taken");
-                }
+                mCamera.takePicture(shutterCallback, null, null, new Camera.PictureCallback() {
+                    @Override
+                    public void onPictureTaken(byte[] data, Camera camera) {
+                        mCameraListener.onPictureTaken(data);
+                        if (mPreviewCallback != null){
+                            final int size = mPreviewSize.getWidth() * mPreviewSize.getHeight() * ImageFormat.getBitsPerPixel(mCameraParameters.getPreviewFormat())/8;
+                            final byte[][] mPreBuffer = {new byte[size]};
+                            mCamera.addCallbackBuffer(mPreBuffer[0]);
+                            mCamera.setPreviewCallbackWithBuffer(new Camera.PreviewCallback() {
+                                @Override
+                                public void onPreviewFrame(byte[] data, Camera camera) {
+                                    if (mPreBuffer[0] == null) {
+                                        mPreBuffer[0] = new byte[size];
+                                    }
+                                    if (mCamera != null){
+                                        mCamera.addCallbackBuffer(mPreBuffer[0]);
+                                        Camera1.this.mPreviewCallback.onPreviewFrame(mPreBuffer[0], camera);
+                                    }
+                                }
+                            });
+                        }
+                        camera.startPreview();
+                    }
+                });
                 break;
 
             case METHOD_STILL:
@@ -355,6 +397,14 @@ public class Camera1 extends CameraImpl {
     @Override
     CameraProperties getCameraProperties() {
         return mCameraProperties;
+    }
+
+    @Override
+    int getPreviewFormat() {
+        if (mCamera != null){
+            return mCamera.getParameters().getPreviewFormat();
+        }
+        return -1;
     }
 
     // Internal:

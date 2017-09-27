@@ -30,4 +30,7 @@ public abstract class CameraListener {
 
     }
 
+    public void onCameraError(Throwable throwable) {
+
+    }
 }
